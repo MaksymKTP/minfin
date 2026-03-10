@@ -271,6 +271,41 @@ body {
   overflow: hidden;
 }
 
+.update-banner {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid #2c3444;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.update-banner.info {
+  background: #18304a;
+  color: #bedcff;
+}
+
+.update-banner.success {
+  background: #1f3b2b;
+  color: #c9f0d6;
+}
+
+.update-banner.error {
+  background: #4a2020;
+  color: #ffd4d4;
+}
+
+.update-banner button {
+  border: 1px solid #7aa6d6;
+  background: #2b4f75;
+  color: #e7f2ff;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
 .table-state {
   display: flex;
   align-items: center;

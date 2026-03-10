@@ -5,10 +5,18 @@ import { fileURLToPath } from "node:url";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import electronUpdater from "electron-updater";
 import { getData, getDefaultFilters, getFilterOptions } from "./db";
-import type { FiltersState, UserSettings } from "../shared/types";
+import type { AutoUpdateStatus, FiltersState, UserSettings } from "../shared/types";
 
 const { autoUpdater } = electronUpdater;
 const USER_SETTINGS_FILE_NAME = "user-settings.json";
+let mainWindowRef: BrowserWindow | null = null;
+
+function emitAutoUpdateStatus(status: AutoUpdateStatus): void {
+  if (!mainWindowRef) {
+    return;
+  }
+  mainWindowRef.webContents.send("auto-update:status", status);
+}
 
 function getUserSettingsPath(): string {
   return path.join(app.getPath("userData"), USER_SETTINGS_FILE_NAME);
@@ -52,6 +60,7 @@ function createWindow(): void {
       sandbox: false
     }
   });
+  mainWindowRef = mainWindow;
 
   mainWindow.on("ready-to-show", () => {
     mainWindow.show();
@@ -101,7 +110,12 @@ function initAutoUpdates(): void {
 
   autoUpdater.on("error", (error) => {
     console.error("Auto update error:", error);
+    emitAutoUpdateStatus({ type: "error", message: error.message });
   });
+  autoUpdater.on("checking-for-update", () => emitAutoUpdateStatus({ type: "checking" }));
+  autoUpdater.on("update-available", (info) => emitAutoUpdateStatus({ type: "available", version: info.version }));
+  autoUpdater.on("update-not-available", () => emitAutoUpdateStatus({ type: "not-available" }));
+  autoUpdater.on("update-downloaded", (info) => emitAutoUpdateStatus({ type: "downloaded", version: info.version }));
 
   void autoUpdater.checkForUpdatesAndNotify();
 }
@@ -119,6 +133,12 @@ app.whenReady().then(() => {
   ipcMain.handle("external:open-url", (_, url: string) => shell.openExternal(url));
   ipcMain.handle("user-settings:get", () => getUserSettings());
   ipcMain.handle("user-settings:save", (_, payload: UserSettings) => saveUserSettings(payload));
+  ipcMain.handle("auto-update:install-now", async () => {
+    if (!app.isPackaged) {
+      return;
+    }
+    autoUpdater.quitAndInstall();
+  });
 
   createWindow();
   initAutoUpdates();

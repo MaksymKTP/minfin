@@ -79,3 +79,9 @@ export interface DataResponse {
 export interface UserSettings {
   companyName: string;
 }
+
+export interface AutoUpdateStatus {
+  type: "checking" | "available" | "not-available" | "downloaded" | "error";
+  version?: string;
+  message?: string;
+}

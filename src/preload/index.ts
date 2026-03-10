@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { DataResponse, FilterOptions, FiltersState, UserSettings } from "../shared/types";
+import type { AutoUpdateStatus, DataResponse, FilterOptions, FiltersState, UserSettings } from "../shared/types";
 
 const api = {
   getDefaultFilters: (): Promise<FiltersState> => ipcRenderer.invoke("filters:default"),
@@ -9,6 +9,12 @@ const api = {
   openExternalUrl: (url: string): Promise<void> => ipcRenderer.invoke("external:open-url", url),
   getUserSettings: (): Promise<UserSettings> => ipcRenderer.invoke("user-settings:get"),
   saveUserSettings: (payload: UserSettings): Promise<UserSettings> => ipcRenderer.invoke("user-settings:save", payload),
+  installUpdateNow: (): Promise<void> => ipcRenderer.invoke("auto-update:install-now"),
+  onAutoUpdateStatus: (callback: (status: AutoUpdateStatus) => void): (() => void) => {
+    const listener = (_: unknown, status: AutoUpdateStatus): void => callback(status);
+    ipcRenderer.on("auto-update:status", listener);
+    return () => ipcRenderer.off("auto-update:status", listener);
+  },
   onOpenSettings: (callback: () => void): (() => void) => {
     const listener = (): void => callback();
     ipcRenderer.on("menu:open-settings", listener);

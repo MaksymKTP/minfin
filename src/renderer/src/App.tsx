@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import type { ExchangeRateRow, FilterOptions, FiltersState, UserSettings } from "../../shared/types";
+import type { AutoUpdateStatus, ExchangeRateRow, FilterOptions, FiltersState, UserSettings } from "../../shared/types";
 
 type SortDirection = "asc" | "desc";
 
@@ -279,6 +279,7 @@ export default function App() {
   const [userSettings, setUserSettings] = useState<UserSettings>({ companyName: "" });
   const [settingsDraftName, setSettingsDraftName] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [autoUpdateStatus, setAutoUpdateStatus] = useState<AutoUpdateStatus | null>(null);
   const latestRequestIdRef = useRef(0);
   const shouldResetMultiFiltersRef = useRef(false);
   const resizingStateRef = useRef<{ column: TableColumnId; startX: number; startWidth: number } | null>(null);
@@ -348,6 +349,13 @@ export default function App() {
     });
     return () => unsubscribe();
   }, [userSettings.companyName]);
+
+  useEffect(() => {
+    const unsubscribe = window.minfinApi.onAutoUpdateStatus((status) => {
+      setAutoUpdateStatus(status);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!filters) {
@@ -786,6 +794,24 @@ export default function App() {
         </aside>
 
         <section className="rates-table-wrapper">
+          {autoUpdateStatus && autoUpdateStatus.type === "available" && (
+            <div className="update-banner info">
+              Обновление найдено: {autoUpdateStatus.version ?? "new version"}. Скачиваем...
+            </div>
+          )}
+          {autoUpdateStatus && autoUpdateStatus.type === "downloaded" && (
+            <div className="update-banner success">
+              <span>Обновление {autoUpdateStatus.version ?? ""} скачано. Перезапустить сейчас?</span>
+              <button type="button" onClick={() => void window.minfinApi.installUpdateNow()}>
+                Перезапустить сейчас
+              </button>
+            </div>
+          )}
+          {autoUpdateStatus && autoUpdateStatus.type === "error" && (
+            <div className="update-banner error">
+              Ошибка автообновления: {autoUpdateStatus.message ?? "unknown"}
+            </div>
+          )}
           <div className="table-state">
             {isLoading && <span>Loading...</span>}
             {error && <span className="error">{error}</span>}
