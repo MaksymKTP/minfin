@@ -210,6 +210,25 @@ body {
   color: #d9e2f2;
 }
 
+.my-company-count {
+  font-weight: 700;
+  color: #ffd24d;
+  text-shadow: 0 0 8px rgba(255, 210, 77, 0.75);
+  animation: pulse-gold 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-gold {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
 .orderbook-table .buy-cell.has-level {
   box-shadow: inset -2px 0 0 rgba(24, 146, 78, 0.8);
 }
@@ -334,4 +353,61 @@ body {
   height: 100%;
   cursor: col-resize;
   user-select: none;
+}
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
+
+.settings-modal {
+  width: 420px;
+  border: 1px solid #344055;
+  border-radius: 8px;
+  background: #101826;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.settings-modal h3 {
+  margin: 0;
+}
+
+.settings-modal label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.settings-modal input {
+  background: #171d29;
+  color: #d9e2f2;
+  border: 1px solid #344055;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-actions button {
+  border: 1px solid #465577;
+  background: #273248;
+  color: #d9e2f2;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.settings-actions .save-btn {
+  border-color: #2f6db2;
+  background: #2a4f80;
 }

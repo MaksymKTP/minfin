@@ -1,10 +1,39 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { Menu, app, BrowserWindow, ipcMain, shell } from "electron";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
-import { autoUpdater } from "electron-updater";
+import electronUpdater from "electron-updater";
 import { getData, getDefaultFilters, getFilterOptions } from "./db";
-import type { FiltersState } from "../shared/types";
+import type { FiltersState, UserSettings } from "../shared/types";
+
+const { autoUpdater } = electronUpdater;
+const USER_SETTINGS_FILE_NAME = "user-settings.json";
+
+function getUserSettingsPath(): string {
+  return path.join(app.getPath("userData"), USER_SETTINGS_FILE_NAME);
+}
+
+async function getUserSettings(): Promise<UserSettings> {
+  try {
+    const raw = await fs.readFile(getUserSettingsPath(), "utf-8");
+    const parsed = JSON.parse(raw) as Partial<UserSettings>;
+    return {
+      companyName: typeof parsed.companyName === "string" ? parsed.companyName : ""
+    };
+  } catch {
+    return { companyName: "" };
+  }
+}
+
+async function saveUserSettings(payload: UserSettings): Promise<UserSettings> {
+  const next: UserSettings = {
+    companyName: typeof payload.companyName === "string" ? payload.companyName.trim() : ""
+  };
+  await fs.mkdir(app.getPath("userData"), { recursive: true });
+  await fs.writeFile(getUserSettingsPath(), JSON.stringify(next, null, 2), "utf-8");
+  return next;
+}
 
 function createWindow(): void {
   const preloadPath = fileURLToPath(new URL("../preload/index.mjs", import.meta.url));
@@ -15,7 +44,7 @@ function createWindow(): void {
     minWidth: 1280,
     minHeight: 760,
     show: false,
-    autoHideMenuBar: true,
+    autoHideMenuBar: false,
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -46,6 +75,20 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
+
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "Настройки",
+      submenu: [
+        {
+          label: "Открыть настройки",
+          accelerator: "CmdOrCtrl+,",
+          click: () => mainWindow.webContents.send("menu:open-settings")
+        }
+      ]
+    }
+  ]);
+  Menu.setApplicationMenu(menu);
 }
 
 function initAutoUpdates(): void {
@@ -74,6 +117,8 @@ app.whenReady().then(() => {
   ipcMain.handle("filters:options", (_, filters: Pick<FiltersState, "cityId" | "currency">) => getFilterOptions(filters));
   ipcMain.handle("rates:data", (_, filters: FiltersState) => getData(filters));
   ipcMain.handle("external:open-url", (_, url: string) => shell.openExternal(url));
+  ipcMain.handle("user-settings:get", () => getUserSettings());
+  ipcMain.handle("user-settings:save", (_, payload: UserSettings) => saveUserSettings(payload));
 
   createWindow();
   initAutoUpdates();

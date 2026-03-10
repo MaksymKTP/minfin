@@ -131,6 +131,27 @@ function toOrderBook(rows: ExchangeRateRow[]): OrderBookPayload {
   return { buy, sell };
 }
 
+function getDatabaseLastUpdate(rows: ExchangeRateRow[]): string | null {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  let latest = Number.NEGATIVE_INFINITY;
+
+  for (const row of rows) {
+    const value = new Date(row.timestamp).getTime();
+    if (!Number.isNaN(value) && value > latest) {
+      latest = value;
+    }
+  }
+
+  if (!Number.isFinite(latest)) {
+    return null;
+  }
+
+  return new Date(latest).toISOString();
+}
+
 export async function getFilterOptions(baseFilters: Pick<FiltersState, "cityId" | "currency">): Promise<FilterOptions> {
   const values: Array<string | number | null> = [baseFilters.cityId, baseFilters.currency];
   const cte = BASE_LATEST_CTE;
@@ -174,7 +195,8 @@ export async function getData(filters: FiltersState): Promise<DataResponse> {
 
   return {
     rows,
-    orderBook: toOrderBook(rows)
+    orderBook: toOrderBook(rows),
+    databaseLastUpdate: getDatabaseLastUpdate(rows)
   };
 }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import type { ExchangeRateRow, FilterOptions, FiltersState } from "../../shared/types";
+import type { ExchangeRateRow, FilterOptions, FiltersState, UserSettings } from "../../shared/types";
 
 type SortDirection = "asc" | "desc";
 
@@ -254,6 +254,10 @@ function getWeightedRate(levels: Array<{ price: number; count: number }>): numbe
   return weightedSum / totalWeight;
 }
 
+function normalizeName(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
 export default function App() {
   const [filters, setFilters] = useState<FiltersState | null>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
@@ -271,6 +275,10 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [databaseLastUpdate, setDatabaseLastUpdate] = useState<string | null>(null);
+  const [userSettings, setUserSettings] = useState<UserSettings>({ companyName: "" });
+  const [settingsDraftName, setSettingsDraftName] = useState("");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const latestRequestIdRef = useRef(0);
   const shouldResetMultiFiltersRef = useRef(false);
   const resizingStateRef = useRef<{ column: TableColumnId; startX: number; startWidth: number } | null>(null);
@@ -312,6 +320,9 @@ export default function App() {
 
         const defaultFilters = await window.minfinApi.getDefaultFilters();
         const stored = readStoredFilters();
+        const storedUserSettings = await window.minfinApi.getUserSettings();
+        setUserSettings(storedUserSettings);
+        setSettingsDraftName(storedUserSettings.companyName);
 
         setFilters({
           cityId: typeof stored?.cityId === "number" ? stored.cityId : defaultFilters.cityId,
@@ -329,6 +340,14 @@ export default function App() {
 
     void init();
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = window.minfinApi.onOpenSettings(() => {
+      setSettingsDraftName(userSettings.companyName);
+      setIsSettingsOpen(true);
+    });
+    return () => unsubscribe();
+  }, [userSettings.companyName]);
 
   useEffect(() => {
     if (!filters) {
@@ -389,6 +408,7 @@ export default function App() {
         }
         setRows(result.rows);
         setLastUpdatedAt(new Date().toLocaleTimeString());
+        setDatabaseLastUpdate(result.databaseLastUpdate ? new Date(result.databaseLastUpdate).toLocaleString() : null);
       } catch (loadError) {
         if (requestId !== latestRequestIdRef.current) {
           return;
@@ -454,6 +474,29 @@ export default function App() {
     () => Math.max(1, ...relatedOrderBook.sell.map((level) => level.count)),
     [relatedOrderBook.sell]
   );
+  const myCompanyPriceMarkers = useMemo(() => {
+    const companyName = normalizeName(userSettings.companyName);
+    const buy = new Set<number>();
+    const sell = new Set<number>();
+
+    if (!companyName) {
+      return { buy, sell };
+    }
+
+    for (const row of orderBookRowsSource) {
+      if (normalizeName(row.office_name) !== companyName) {
+        continue;
+      }
+      if (row.buy_rate !== null) {
+        buy.add(row.buy_rate);
+      }
+      if (row.sell_rate !== null) {
+        sell.add(row.sell_rate);
+      }
+    }
+
+    return { buy, sell };
+  }, [orderBookRowsSource, userSettings.companyName]);
   const weightedBuyRate = useMemo(() => getWeightedRate(relatedOrderBook.buy), [relatedOrderBook.buy]);
   const weightedSellRate = useMemo(() => getWeightedRate(relatedOrderBook.sell), [relatedOrderBook.sell]);
 
@@ -541,6 +584,20 @@ export default function App() {
     };
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";
+  };
+
+  const saveSettings = (): void => {
+    const next = { companyName: settingsDraftName.trim() };
+    void window.minfinApi
+      .saveUserSettings(next)
+      .then((saved) => {
+        setUserSettings(saved);
+        setIsSettingsOpen(false);
+      })
+      .catch((saveError) => {
+        const message = saveError instanceof Error ? saveError.message : "Failed to save settings";
+        setError(message);
+      });
   };
 
   if (!filters) {
@@ -673,7 +730,7 @@ export default function App() {
                         className="buy-cell has-level"
                         style={{ backgroundColor: getLevelColor("buy", level.count, relatedMaxBuyCount) }}
                       >
-                        {level.count}
+                        <span className={myCompanyPriceMarkers.buy.has(level.price) ? "my-company-count" : ""}>{level.count}</span>
                       </td>
                       <td
                         className="buy-cell has-level"
@@ -718,7 +775,7 @@ export default function App() {
                         className="sell-cell has-level"
                         style={{ backgroundColor: getLevelColor("sell", level.count, relatedMaxSellCount) }}
                       >
-                        {level.count}
+                        <span className={myCompanyPriceMarkers.sell.has(level.price) ? "my-company-count" : ""}>{level.count}</span>
                       </td>
                     </tr>
                   ))}
@@ -734,7 +791,7 @@ export default function App() {
             {error && <span className="error">{error}</span>}
             {!isLoading && !error && (
               <span>
-                Rows: {sortedRows.length} | Updated: {lastUpdatedAt ?? "-"}
+                Rows: {sortedRows.length} | Updated: {lastUpdatedAt ?? "-"} | DataBase Last Update: {databaseLastUpdate ?? "-"}
               </span>
             )}
           </div>
@@ -791,6 +848,29 @@ export default function App() {
           </div>
         </section>
       </section>
+      {isSettingsOpen && (
+        <div className="settings-backdrop">
+          <div className="settings-modal">
+            <h3>Настройки</h3>
+            <label>
+              Название компании
+              <input
+                value={settingsDraftName}
+                onChange={(event) => setSettingsDraftName(event.target.value)}
+                placeholder="Введите название"
+              />
+            </label>
+            <div className="settings-actions">
+              <button type="button" onClick={() => setIsSettingsOpen(false)}>
+                Отмена
+              </button>
+              <button type="button" className="save-btn" onClick={saveSettings}>
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

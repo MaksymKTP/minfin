@@ -73,4 +73,9 @@ export interface FilterOptions {
 export interface DataResponse {
   orderBook: OrderBookPayload;
   rows: ExchangeRateRow[];
+  databaseLastUpdate: string | null;
+}
+
+export interface UserSettings {
+  companyName: string;
 }
