@@ -1,4 +1,4 @@
-import { Menu, app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { Menu, app, BrowserWindow, ipcMain, shell } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,12 +10,101 @@ import type { AutoUpdateStatus, FiltersState, UserSettings } from "../shared/typ
 const { autoUpdater } = electronUpdater;
 const USER_SETTINGS_FILE_NAME = "user-settings.json";
 let mainWindowRef: BrowserWindow | null = null;
+const UPDATE_WINDOW_TITLE = "Minfin Arbitrage - Обновление";
+
+const UPDATE_WINDOW_HTML = `
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body {
+        margin: 0;
+        background: #101826;
+        color: #d9e2f2;
+        font-family: Segoe UI, Arial, sans-serif;
+      }
+      .wrap {
+        height: 100vh;
+        padding: 18px;
+        display: grid;
+        align-content: center;
+        gap: 12px;
+      }
+      .title {
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .status {
+        font-size: 13px;
+        color: #c7d4ea;
+      }
+      .bar {
+        width: 100%;
+        height: 12px;
+        border: 1px solid #344055;
+        border-radius: 99px;
+        background: #162234;
+        overflow: hidden;
+      }
+      .fill {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, #2f6db2 0%, #54a8ff 100%);
+        transition: width 0.2s ease;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="title">Проверка обновлений</div>
+      <div id="status" class="status">Инициализация...</div>
+      <div class="bar"><div id="fill" class="fill"></div></div>
+    </div>
+    <script>
+      window.__setUpdateProgress = (status, percent) => {
+        document.getElementById("status").textContent = status;
+        document.getElementById("fill").style.width = Math.max(0, Math.min(100, percent)) + "%";
+      };
+    </script>
+  </body>
+</html>
+`;
 
 function emitAutoUpdateStatus(status: AutoUpdateStatus): void {
   if (!mainWindowRef) {
     return;
   }
   mainWindowRef.webContents.send("auto-update:status", status);
+}
+
+async function createUpdateWindow(): Promise<BrowserWindow> {
+  const window = new BrowserWindow({
+    title: UPDATE_WINDOW_TITLE,
+    width: 520,
+    height: 220,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    show: false,
+    autoHideMenuBar: true
+  });
+  await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(UPDATE_WINDOW_HTML)}`);
+  window.show();
+  return window;
+}
+
+function setUpdateWindowProgress(updateWindow: BrowserWindow, status: string, percent: number): void {
+  if (updateWindow.isDestroyed()) {
+    return;
+  }
+  const escapedStatus = JSON.stringify(status);
+  void updateWindow.webContents.executeJavaScript(`window.__setUpdateProgress(${escapedStatus}, ${percent});`);
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getUserSettingsPath(): string {
@@ -120,8 +209,10 @@ function createWindow(): void {
   Menu.setApplicationMenu(menu);
 }
 
-async function runPreLaunchUpdateFlow(): Promise<"launch" | "installing"> {
+async function runPreLaunchUpdateFlow(updateWindow: BrowserWindow): Promise<"launch" | "installing"> {
   if (!app.isPackaged) {
+    setUpdateWindowProgress(updateWindow, "Режим разработки: проверка обновлений пропущена.", 100);
+    await sleep(800);
     return "launch";
   }
 
@@ -132,42 +223,46 @@ async function runPreLaunchUpdateFlow(): Promise<"launch" | "installing"> {
     console.error("Auto update error:", error);
     emitAutoUpdateStatus({ type: "error", message: error.message });
   });
+  autoUpdater.on("download-progress", (progress) => {
+    setUpdateWindowProgress(
+      updateWindow,
+      `Скачивание обновления... ${Math.round(progress.percent)}%`,
+      Math.max(10, Math.round(progress.percent))
+    );
+  });
 
   try {
     emitAutoUpdateStatus({ type: "checking" });
+    setUpdateWindowProgress(updateWindow, "Проверка обновлений...", 10);
     const result = await autoUpdater.checkForUpdates();
     const nextVersion = result?.updateInfo?.version;
 
     if (!nextVersion || nextVersion === app.getVersion()) {
       emitAutoUpdateStatus({ type: "not-available" });
+      setUpdateWindowProgress(updateWindow, "Версия актуальна.", 100);
+      await sleep(1000);
       return "launch";
     }
 
     emitAutoUpdateStatus({ type: "available", version: nextVersion });
-    const answer = await dialog.showMessageBox({
-      type: "question",
-      title: "Доступно обновление",
-      message: `Найдена новая версия ${nextVersion}.`,
-      detail: "Установить обновление перед запуском приложения?",
-      buttons: ["Да, установить", "Нет, позже"],
-      defaultId: 0,
-      cancelId: 1
-    });
-
-    if (answer.response !== 0) {
-      return "launch";
-    }
+    setUpdateWindowProgress(updateWindow, `Найдена версия ${nextVersion}. Подготовка к скачиванию...`, 20);
 
     await autoUpdater.downloadUpdate();
     emitAutoUpdateStatus({ type: "downloaded", version: nextVersion });
+    setUpdateWindowProgress(updateWindow, "Обновление скачано. Установка...", 100);
+    await sleep(700);
     autoUpdater.quitAndInstall();
     return "installing";
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown auto-update error";
     if (message.includes("No published versions on GitHub")) {
+      setUpdateWindowProgress(updateWindow, "Опубликованных обновлений нет. Запуск...", 100);
+      await sleep(1000);
       return "launch";
     }
     console.error("Pre-launch update flow failed:", error);
+    setUpdateWindowProgress(updateWindow, "Ошибка проверки обновлений. Запуск текущей версии...", 100);
+    await sleep(1200);
     return "launch";
   }
 }
@@ -192,8 +287,12 @@ app.whenReady().then(async () => {
     autoUpdater.quitAndInstall();
   });
 
-  const updateFlowResult = await runPreLaunchUpdateFlow();
+  const updateWindow = await createUpdateWindow();
+  const updateFlowResult = await runPreLaunchUpdateFlow(updateWindow);
   if (updateFlowResult === "launch") {
+    if (!updateWindow.isDestroyed()) {
+      updateWindow.close();
+    }
     createWindow();
   }
 
