@@ -1,0 +1,9 @@
+{
+  "defaultCityId": 1,
+  "defaultCurrency": "USD",
+  "supportedCurrencies": ["USD", "EUR", "PLN", "GBP", "CHF"],
+  "cities": {
+    "1": "Киев",
+    "3": "Львов"
+  }
+}

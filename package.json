@@ -1,0 +1,72 @@
+{
+  "name": "minfin",
+  "version": "1.0.0",
+  "description": "Desktop app for Minfin arbitrage visualization",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never",
+    "release:win": "npm run build && electron-builder --win nsis --publish always"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@electron-toolkit/utils": "^4.0.0",
+    "dotenv": "^17.3.1",
+    "electron-updater": "^6.6.2",
+    "pg": "^8.20.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "@types/pg": "^8.18.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "electron": "^40.8.0",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.9.3"
+  },
+  "build": {
+    "appId": "com.minfin.arbitrage",
+    "productName": "Minfin Arbitrage",
+    "asar": true,
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "settings.json",
+        "to": "settings.json"
+      },
+      {
+        "from": ".env",
+        "to": ".env"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "MaksymKTP",
+        "repo": "minfin"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
