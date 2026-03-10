@@ -214,19 +214,6 @@ body {
   font-weight: 700;
   color: #ffd24d;
   text-shadow: 0 0 8px rgba(255, 210, 77, 0.75);
-  animation: pulse-gold 1.2s infinite ease-in-out;
-}
-
-@keyframes pulse-gold {
-  0% {
-    opacity: 0.5;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.5;
-  }
 }
 
 .orderbook-table .buy-cell.has-level {
@@ -304,6 +291,18 @@ body {
   border-radius: 4px;
   padding: 4px 8px;
   cursor: pointer;
+}
+
+.banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.banner-close {
+  min-width: 24px;
+  padding: 2px 6px;
+  line-height: 1;
 }
 
 .table-state {

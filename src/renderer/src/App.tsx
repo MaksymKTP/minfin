@@ -21,6 +21,14 @@ interface SelectOption {
   label: string;
 }
 
+interface SettingsDraft {
+  companyName: string;
+  dbHost: string;
+  dbPort: string;
+  dbUser: string;
+  dbPassword: string;
+}
+
 type TableColumnId =
   | "office_name"
   | "buy_rate"
@@ -276,10 +284,23 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [databaseLastUpdate, setDatabaseLastUpdate] = useState<string | null>(null);
-  const [userSettings, setUserSettings] = useState<UserSettings>({ companyName: "" });
-  const [settingsDraftName, setSettingsDraftName] = useState("");
+  const [userSettings, setUserSettings] = useState<UserSettings>({
+    companyName: "",
+    dbHost: "",
+    dbPort: "",
+    dbUser: "",
+    dbPassword: ""
+  });
+  const [settingsDraft, setSettingsDraft] = useState<SettingsDraft>({
+    companyName: "",
+    dbHost: "",
+    dbPort: "",
+    dbUser: "",
+    dbPassword: ""
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [autoUpdateStatus, setAutoUpdateStatus] = useState<AutoUpdateStatus | null>(null);
+  const [isUpdateBannerClosed, setIsUpdateBannerClosed] = useState(false);
   const latestRequestIdRef = useRef(0);
   const shouldResetMultiFiltersRef = useRef(false);
   const resizingStateRef = useRef<{ column: TableColumnId; startX: number; startWidth: number } | null>(null);
@@ -323,7 +344,7 @@ export default function App() {
         const stored = readStoredFilters();
         const storedUserSettings = await window.minfinApi.getUserSettings();
         setUserSettings(storedUserSettings);
-        setSettingsDraftName(storedUserSettings.companyName);
+        setSettingsDraft(storedUserSettings);
 
         setFilters({
           cityId: typeof stored?.cityId === "number" ? stored.cityId : defaultFilters.cityId,
@@ -344,15 +365,22 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = window.minfinApi.onOpenSettings(() => {
-      setSettingsDraftName(userSettings.companyName);
+      setSettingsDraft({
+        companyName: userSettings.companyName,
+        dbHost: userSettings.dbHost,
+        dbPort: userSettings.dbPort,
+        dbUser: userSettings.dbUser,
+        dbPassword: userSettings.dbPassword
+      });
       setIsSettingsOpen(true);
     });
     return () => unsubscribe();
-  }, [userSettings.companyName]);
+  }, [userSettings]);
 
   useEffect(() => {
     const unsubscribe = window.minfinApi.onAutoUpdateStatus((status) => {
       setAutoUpdateStatus(status);
+      setIsUpdateBannerClosed(false);
     });
     return () => unsubscribe();
   }, []);
@@ -595,7 +623,13 @@ export default function App() {
   };
 
   const saveSettings = (): void => {
-    const next = { companyName: settingsDraftName.trim() };
+    const next: UserSettings = {
+      companyName: settingsDraft.companyName.trim(),
+      dbHost: settingsDraft.dbHost.trim(),
+      dbPort: settingsDraft.dbPort.trim(),
+      dbUser: settingsDraft.dbUser.trim(),
+      dbPassword: settingsDraft.dbPassword
+    };
     void window.minfinApi
       .saveUserSettings(next)
       .then((saved) => {
@@ -794,22 +828,33 @@ export default function App() {
         </aside>
 
         <section className="rates-table-wrapper">
-          {autoUpdateStatus && autoUpdateStatus.type === "available" && (
+          {autoUpdateStatus && autoUpdateStatus.type === "available" && !isUpdateBannerClosed && (
             <div className="update-banner info">
-              Обновление найдено: {autoUpdateStatus.version ?? "new version"}. Скачиваем...
-            </div>
-          )}
-          {autoUpdateStatus && autoUpdateStatus.type === "downloaded" && (
-            <div className="update-banner success">
-              <span>Обновление {autoUpdateStatus.version ?? ""} скачано. Перезапустить сейчас?</span>
-              <button type="button" onClick={() => void window.minfinApi.installUpdateNow()}>
-                Перезапустить сейчас
+              <span>Обновление найдено: {autoUpdateStatus.version ?? "new version"}. Скачиваем...</span>
+              <button type="button" className="banner-close" onClick={() => setIsUpdateBannerClosed(true)}>
+                ×
               </button>
             </div>
           )}
-          {autoUpdateStatus && autoUpdateStatus.type === "error" && (
+          {autoUpdateStatus && autoUpdateStatus.type === "downloaded" && !isUpdateBannerClosed && (
+            <div className="update-banner success">
+              <span>Обновление {autoUpdateStatus.version ?? ""} скачано. Перезапустить сейчас?</span>
+              <div className="banner-actions">
+                <button type="button" onClick={() => void window.minfinApi.installUpdateNow()}>
+                  Перезапустить сейчас
+                </button>
+                <button type="button" className="banner-close" onClick={() => setIsUpdateBannerClosed(true)}>
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+          {autoUpdateStatus && autoUpdateStatus.type === "error" && !isUpdateBannerClosed && (
             <div className="update-banner error">
-              Ошибка автообновления: {autoUpdateStatus.message ?? "unknown"}
+              <span>Ошибка автообновления: {autoUpdateStatus.message ?? "unknown"}</span>
+              <button type="button" className="banner-close" onClick={() => setIsUpdateBannerClosed(true)}>
+                ×
+              </button>
             </div>
           )}
           <div className="table-state">
@@ -881,9 +926,42 @@ export default function App() {
             <label>
               Название компании
               <input
-                value={settingsDraftName}
-                onChange={(event) => setSettingsDraftName(event.target.value)}
+                value={settingsDraft.companyName}
+                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, companyName: event.target.value }))}
                 placeholder="Введите название"
+              />
+            </label>
+            <label>
+              DB Host (заглушка)
+              <input
+                value={settingsDraft.dbHost}
+                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, dbHost: event.target.value }))}
+                placeholder="127.0.0.1"
+              />
+            </label>
+            <label>
+              DB Port (заглушка)
+              <input
+                value={settingsDraft.dbPort}
+                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, dbPort: event.target.value }))}
+                placeholder="5432"
+              />
+            </label>
+            <label>
+              DB User (заглушка)
+              <input
+                value={settingsDraft.dbUser}
+                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, dbUser: event.target.value }))}
+                placeholder="user"
+              />
+            </label>
+            <label>
+              DB Password (заглушка)
+              <input
+                type="password"
+                value={settingsDraft.dbPassword}
+                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, dbPassword: event.target.value }))}
+                placeholder="password"
               />
             </label>
             <div className="settings-actions">

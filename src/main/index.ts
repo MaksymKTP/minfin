@@ -27,16 +27,24 @@ async function getUserSettings(): Promise<UserSettings> {
     const raw = await fs.readFile(getUserSettingsPath(), "utf-8");
     const parsed = JSON.parse(raw) as Partial<UserSettings>;
     return {
-      companyName: typeof parsed.companyName === "string" ? parsed.companyName : ""
+      companyName: typeof parsed.companyName === "string" ? parsed.companyName : "",
+      dbHost: typeof parsed.dbHost === "string" ? parsed.dbHost : "",
+      dbPort: typeof parsed.dbPort === "string" ? parsed.dbPort : "",
+      dbUser: typeof parsed.dbUser === "string" ? parsed.dbUser : "",
+      dbPassword: typeof parsed.dbPassword === "string" ? parsed.dbPassword : ""
     };
   } catch {
-    return { companyName: "" };
+    return { companyName: "", dbHost: "", dbPort: "", dbUser: "", dbPassword: "" };
   }
 }
 
 async function saveUserSettings(payload: UserSettings): Promise<UserSettings> {
   const next: UserSettings = {
-    companyName: typeof payload.companyName === "string" ? payload.companyName.trim() : ""
+    companyName: typeof payload.companyName === "string" ? payload.companyName.trim() : "",
+    dbHost: typeof payload.dbHost === "string" ? payload.dbHost.trim() : "",
+    dbPort: typeof payload.dbPort === "string" ? payload.dbPort.trim() : "",
+    dbUser: typeof payload.dbUser === "string" ? payload.dbUser.trim() : "",
+    dbPassword: typeof payload.dbPassword === "string" ? payload.dbPassword : ""
   };
   await fs.mkdir(app.getPath("userData"), { recursive: true });
   await fs.writeFile(getUserSettingsPath(), JSON.stringify(next, null, 2), "utf-8");

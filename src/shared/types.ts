@@ -78,6 +78,10 @@ export interface DataResponse {
 
 export interface UserSettings {
   companyName: string;
+  dbHost: string;
+  dbPort: string;
+  dbUser: string;
+  dbPassword: string;
 }
 
 export interface AutoUpdateStatus {
