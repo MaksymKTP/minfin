@@ -1,4 +1,4 @@
-import { Menu, app, BrowserWindow, ipcMain, shell } from "electron";
+import { Menu, app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,8 +53,10 @@ async function saveUserSettings(payload: UserSettings): Promise<UserSettings> {
 
 function createWindow(): void {
   const preloadPath = fileURLToPath(new URL("../preload/index.mjs", import.meta.url));
+  const appTitle = `Minfin Arbitrage v${app.getVersion()}`;
 
   const mainWindow = new BrowserWindow({
+    title: appTitle,
     width: 1600,
     height: 980,
     minWidth: 1280,
@@ -108,27 +110,59 @@ function createWindow(): void {
   Menu.setApplicationMenu(menu);
 }
 
-function initAutoUpdates(): void {
+async function runPreLaunchUpdateFlow(): Promise<"launch" | "installing"> {
   if (!app.isPackaged) {
-    return;
+    return "launch";
   }
 
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on("error", (error) => {
     console.error("Auto update error:", error);
     emitAutoUpdateStatus({ type: "error", message: error.message });
   });
-  autoUpdater.on("checking-for-update", () => emitAutoUpdateStatus({ type: "checking" }));
-  autoUpdater.on("update-available", (info) => emitAutoUpdateStatus({ type: "available", version: info.version }));
-  autoUpdater.on("update-not-available", () => emitAutoUpdateStatus({ type: "not-available" }));
-  autoUpdater.on("update-downloaded", (info) => emitAutoUpdateStatus({ type: "downloaded", version: info.version }));
 
-  void autoUpdater.checkForUpdatesAndNotify();
+  try {
+    emitAutoUpdateStatus({ type: "checking" });
+    const result = await autoUpdater.checkForUpdates();
+    const nextVersion = result?.updateInfo?.version;
+
+    if (!nextVersion || nextVersion === app.getVersion()) {
+      emitAutoUpdateStatus({ type: "not-available" });
+      return "launch";
+    }
+
+    emitAutoUpdateStatus({ type: "available", version: nextVersion });
+    const answer = await dialog.showMessageBox({
+      type: "question",
+      title: "Доступно обновление",
+      message: `Найдена новая версия ${nextVersion}.`,
+      detail: "Установить обновление перед запуском приложения?",
+      buttons: ["Да, установить", "Нет, позже"],
+      defaultId: 0,
+      cancelId: 1
+    });
+
+    if (answer.response !== 0) {
+      return "launch";
+    }
+
+    await autoUpdater.downloadUpdate();
+    emitAutoUpdateStatus({ type: "downloaded", version: nextVersion });
+    autoUpdater.quitAndInstall();
+    return "installing";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown auto-update error";
+    if (message.includes("No published versions on GitHub")) {
+      return "launch";
+    }
+    console.error("Pre-launch update flow failed:", error);
+    return "launch";
+  }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId("com.minfin.arbitrage");
 
   app.on("browser-window-created", (_, window) => {
@@ -148,8 +182,10 @@ app.whenReady().then(() => {
     autoUpdater.quitAndInstall();
   });
 
-  createWindow();
-  initAutoUpdates();
+  const updateFlowResult = await runPreLaunchUpdateFlow();
+  if (updateFlowResult === "launch") {
+    createWindow();
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
