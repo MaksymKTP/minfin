@@ -73,7 +73,17 @@ function createWindow(): void {
   mainWindowRef = mainWindow;
 
   mainWindow.on("ready-to-show", () => {
+    mainWindow.setTitle(appTitle);
     mainWindow.show();
+  });
+
+  mainWindow.on("page-title-updated", (event) => {
+    event.preventDefault();
+    mainWindow.setTitle(appTitle);
+  });
+
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow.setTitle(appTitle);
   });
 
   mainWindow.webContents.on("preload-error", (_, preloadPath, error) => {
