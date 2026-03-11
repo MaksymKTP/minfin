@@ -3,7 +3,6 @@
   "defaultCurrency": "USD",
   "supportedCurrencies": ["USD", "EUR", "PLN", "GBP", "CHF", "CAD", "NOK", "DKK", "CZK", "TRY", "RON", "MDL", "ILS", "AUD", "AED", "SEK", "JPY", "CNY"],
   "cities": {
-    "1": "Киев",
-    "3": "Львов"
+    "1": "Киев"
   }
 }

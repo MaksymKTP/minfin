@@ -1,6 +1,6 @@
 {
   "name": "minfin",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Desktop app for Minfin arbitrage visualization",
   "main": "./out/main/index.js",
   "scripts": {
@@ -56,7 +56,8 @@
       {
         "provider": "github",
         "owner": "MaksymKTP",
-        "repo": "minfin"
+        "repo": "minfin",
+        "releaseType": "release"
       }
     ],
     "win": {
