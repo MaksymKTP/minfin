@@ -139,6 +139,7 @@ body {
   gap: 4px;
   min-height: 0;
   align-content: start;
+  overflow: hidden;
 }
 
 .orderbook-header {
@@ -175,19 +176,24 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  overflow: auto;
+  overflow: hidden;
   min-height: 0;
-  align-content: start;
-  align-items: start;
-  align-self: start;
+  align-content: stretch;
+  align-items: stretch;
+  align-self: stretch;
+}
+
+.book-side-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid #2d3c57;
 }
 
 .orderbook-table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  border: 1px solid #2d3c57;
-  align-self: start;
 }
 
 .orderbook-table th,
@@ -377,6 +383,19 @@ body {
   background: transparent;
   border: 0;
   cursor: pointer;
+}
+
+.bool-icon {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bool-icon.yes {
+  color: #4cd07a;
+}
+
+.bool-icon.no {
+  color: #ff6b7d;
 }
 
 .col-resizer {

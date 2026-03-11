@@ -39,7 +39,15 @@ type TableColumnId =
   | "buy_min_count"
   | "buy_max_count"
   | "sell_min_count"
-  | "sell_max_count";
+  | "sell_max_count"
+  | "damaged_bills"
+  | "recount_room"
+  | "parking"
+  | "blackout_enabled"
+  | "auto_update"
+  | "rating_average"
+  | "rating_count"
+  | "timestamp";
 
 const TABLE_COLUMNS: Array<{ id: TableColumnId; label: string }> = [
   { id: "office_name", label: "Компания" },
@@ -51,7 +59,15 @@ const TABLE_COLUMNS: Array<{ id: TableColumnId; label: string }> = [
   { id: "buy_min_count", label: "Мин. покупки" },
   { id: "buy_max_count", label: "Макс. покупки" },
   { id: "sell_min_count", label: "Мин. продажи" },
-  { id: "sell_max_count", label: "Макс. продажи" }
+  { id: "sell_max_count", label: "Макс. продажи" },
+  { id: "damaged_bills", label: "Ветхарь" },
+  { id: "recount_room", label: "Пересчет купюр" },
+  { id: "parking", label: "Парковка" },
+  { id: "blackout_enabled", label: "Блекаут" },
+  { id: "auto_update", label: "Автообновление" },
+  { id: "rating_average", label: "Рейтинг" },
+  { id: "rating_count", label: "К-во оценок" },
+  { id: "timestamp", label: "Дата и время" }
 ];
 
 const DEFAULT_COLUMN_WIDTHS: Record<TableColumnId, number> = {
@@ -64,7 +80,15 @@ const DEFAULT_COLUMN_WIDTHS: Record<TableColumnId, number> = {
   buy_min_count: 140,
   buy_max_count: 150,
   sell_min_count: 140,
-  sell_max_count: 150
+  sell_max_count: 150,
+  damaged_bills: 90,
+  recount_room: 130,
+  parking: 90,
+  blackout_enabled: 90,
+  auto_update: 120,
+  rating_average: 90,
+  rating_count: 100,
+  timestamp: 170
 };
 
 function toNumber(value: string): number {
@@ -243,14 +267,24 @@ function getSpread(row: ExchangeRateRow): number | null {
   return row.sell_rate - row.buy_rate;
 }
 
-function getSortValue(row: ExchangeRateRow, column: TableColumnId): string | number | null {
+function getSortValue(row: ExchangeRateRow, column: TableColumnId): string | number | boolean | null {
   if (column === "spread") {
     return getSpread(row);
   }
   if (column === "announcement_link") {
     return row.branch_id;
   }
+  if (column === "timestamp") {
+    return new Date(row.timestamp).getTime();
+  }
   return row[column];
+}
+
+function renderBooleanIcon(value: boolean | null) {
+  if (value) {
+    return <span className="bool-icon yes">✓</span>;
+  }
+  return <span className="bool-icon no">✕</span>;
 }
 
 function getWeightedRate(levels: Array<{ price: number; count: number }>): number | null {
@@ -758,71 +792,75 @@ export default function App() {
               )}
             </div>
             <div className="book-grid">
-              <table className="orderbook-table buy-table">
-                <thead>
-                  <tr>
-                    <th>Buy count</th>
-                    <th>Buy price</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {relatedOrderBook.buy.map((level) => (
-                    <tr key={`buy-${level.price}`}>
-                      <td
-                        className="buy-cell has-level"
-                        style={{ backgroundColor: getLevelColor("buy", level.count, relatedMaxBuyCount) }}
-                      >
-                        <span className={myCompanyPriceMarkers.buy.has(level.price) ? "my-company-count" : ""}>{level.count}</span>
-                      </td>
-                      <td
-                        className="buy-cell has-level"
-                        style={{ backgroundColor: getLevelColor("buy", level.count, relatedMaxBuyCount) }}
-                      >
-                        <button
-                          type="button"
-                          className={`level-price-button ${selectedPrice?.side === "buy" && selectedPrice.price === level.price ? "active" : ""}`}
-                          onClick={() => setSelectedPrice({ side: "buy", price: level.price })}
-                        >
-                          {level.price.toFixed(4)}
-                        </button>
-                      </td>
+              <div className="book-side-scroll">
+                <table className="orderbook-table buy-table">
+                  <thead>
+                    <tr>
+                      <th>Buy count</th>
+                      <th>Buy price</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {relatedOrderBook.buy.map((level) => (
+                      <tr key={`buy-${level.price}`}>
+                        <td
+                          className="buy-cell has-level"
+                          style={{ backgroundColor: getLevelColor("buy", level.count, relatedMaxBuyCount) }}
+                        >
+                          <span className={myCompanyPriceMarkers.buy.has(level.price) ? "my-company-count" : ""}>{level.count}</span>
+                        </td>
+                        <td
+                          className="buy-cell has-level"
+                          style={{ backgroundColor: getLevelColor("buy", level.count, relatedMaxBuyCount) }}
+                        >
+                          <button
+                            type="button"
+                            className={`level-price-button ${selectedPrice?.side === "buy" && selectedPrice.price === level.price ? "active" : ""}`}
+                            onClick={() => setSelectedPrice({ side: "buy", price: level.price })}
+                          >
+                            {level.price.toFixed(4)}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-              <table className="orderbook-table sell-table">
-                <thead>
-                  <tr>
-                    <th>Sell price</th>
-                    <th>Sell count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {relatedOrderBook.sell.map((level) => (
-                    <tr key={`sell-${level.price}`}>
-                      <td
-                        className="sell-cell has-level"
-                        style={{ backgroundColor: getLevelColor("sell", level.count, relatedMaxSellCount) }}
-                      >
-                        <button
-                          type="button"
-                          className={`level-price-button ${selectedPrice?.side === "sell" && selectedPrice.price === level.price ? "active" : ""}`}
-                          onClick={() => setSelectedPrice({ side: "sell", price: level.price })}
-                        >
-                          {level.price.toFixed(4)}
-                        </button>
-                      </td>
-                      <td
-                        className="sell-cell has-level"
-                        style={{ backgroundColor: getLevelColor("sell", level.count, relatedMaxSellCount) }}
-                      >
-                        <span className={myCompanyPriceMarkers.sell.has(level.price) ? "my-company-count" : ""}>{level.count}</span>
-                      </td>
+              <div className="book-side-scroll">
+                <table className="orderbook-table sell-table">
+                  <thead>
+                    <tr>
+                      <th>Sell price</th>
+                      <th>Sell count</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {relatedOrderBook.sell.map((level) => (
+                      <tr key={`sell-${level.price}`}>
+                        <td
+                          className="sell-cell has-level"
+                          style={{ backgroundColor: getLevelColor("sell", level.count, relatedMaxSellCount) }}
+                        >
+                          <button
+                            type="button"
+                            className={`level-price-button ${selectedPrice?.side === "sell" && selectedPrice.price === level.price ? "active" : ""}`}
+                            onClick={() => setSelectedPrice({ side: "sell", price: level.price })}
+                          >
+                            {level.price.toFixed(4)}
+                          </button>
+                        </td>
+                        <td
+                          className="sell-cell has-level"
+                          style={{ backgroundColor: getLevelColor("sell", level.count, relatedMaxSellCount) }}
+                        >
+                          <span className={myCompanyPriceMarkers.sell.has(level.price) ? "my-company-count" : ""}>{level.count}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </section>
         </aside>
@@ -912,6 +950,14 @@ export default function App() {
                     <td>{formatInteger(row.buy_max_count)}</td>
                     <td>{formatInteger(row.sell_min_count)}</td>
                     <td>{formatInteger(row.sell_max_count)}</td>
+                    <td>{renderBooleanIcon(row.damaged_bills)}</td>
+                    <td>{renderBooleanIcon(row.recount_room)}</td>
+                    <td>{renderBooleanIcon(row.parking)}</td>
+                    <td>{renderBooleanIcon(row.blackout_enabled)}</td>
+                    <td>{renderBooleanIcon(row.auto_update)}</td>
+                    <td>{formatNumber(row.rating_average, 2)}</td>
+                    <td>{formatInteger(row.rating_count)}</td>
+                    <td>{new Date(row.timestamp).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
