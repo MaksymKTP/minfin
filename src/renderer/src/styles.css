@@ -41,6 +41,28 @@ body {
   min-height: 0;
 }
 
+.db-warning {
+  border: 1px solid #5d4a1e;
+  background: #2a220f;
+  color: #ffdca3;
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.db-warning button {
+  border: 1px solid #7a6328;
+  background: #4a3d1b;
+  color: #ffe7b8;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
 .filters {
   display: grid;
   gap: 8px;

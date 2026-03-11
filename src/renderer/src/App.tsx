@@ -366,6 +366,28 @@ export default function App() {
     () => PINNED_OPTIONS.map((item) => ({ value: String(item.value), label: item.label })),
     []
   );
+  const isDbConfigured = useMemo(
+    () =>
+      Boolean(
+        userSettings.dbHost.trim() &&
+          userSettings.dbPort.trim() &&
+          userSettings.dbUser.trim() &&
+          userSettings.dbPassword.trim()
+      ),
+    [userSettings.dbHost, userSettings.dbPassword, userSettings.dbPort, userSettings.dbUser]
+  );
+  const hasDbCredentialError = (error ?? "").includes("Неверные данные подключения к БД");
+
+  const openSettingsModal = (): void => {
+    setSettingsDraft({
+      companyName: userSettings.companyName,
+      dbHost: userSettings.dbHost,
+      dbPort: userSettings.dbPort,
+      dbUser: userSettings.dbUser,
+      dbPassword: userSettings.dbPassword
+    });
+    setIsSettingsOpen(true);
+  };
 
   useEffect(() => {
     const init = async (): Promise<void> => {
@@ -375,8 +397,10 @@ export default function App() {
         }
 
         const defaultFilters = await window.minfinApi.getDefaultFilters();
+        const staticOptions = await window.minfinApi.getStaticFilterOptions();
         const stored = readStoredFilters();
         const storedUserSettings = await window.minfinApi.getUserSettings();
+        setFilterOptions(staticOptions);
         setUserSettings(storedUserSettings);
         setSettingsDraft(storedUserSettings);
 
@@ -399,17 +423,10 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = window.minfinApi.onOpenSettings(() => {
-      setSettingsDraft({
-        companyName: userSettings.companyName,
-        dbHost: userSettings.dbHost,
-        dbPort: userSettings.dbPort,
-        dbUser: userSettings.dbUser,
-        dbPassword: userSettings.dbPassword
-      });
-      setIsSettingsOpen(true);
+      openSettingsModal();
     });
     return () => unsubscribe();
-  }, [userSettings]);
+  }, [userSettings.dbHost, userSettings.dbPassword, userSettings.dbPort, userSettings.dbUser, userSettings.companyName]);
 
   useEffect(() => {
     const unsubscribe = window.minfinApi.onAutoUpdateStatus((status) => {
@@ -432,33 +449,49 @@ export default function App() {
     }
 
     const loadOptions = async (): Promise<void> => {
-      const options = await window.minfinApi.getFilterOptions({
-        cityId: filters.cityId,
-        currency: filters.currency
-      });
-      setFilterOptions(options);
-      if (shouldResetMultiFiltersRef.current) {
-        setFilters((prev) => {
-          if (!prev) {
-            return prev;
-          }
-          return {
-            ...prev,
-            officeNames: options.officeNames,
-            addresses: options.addresses,
-            pinnedValues: [true, false]
-          };
+      if (!isDbConfigured) {
+        setFilterOptions((prev) => ({ ...prev, officeNames: [], addresses: [] }));
+        return;
+      }
+      try {
+        const options = await window.minfinApi.getFilterOptions({
+          cityId: filters.cityId,
+          currency: filters.currency
         });
-        shouldResetMultiFiltersRef.current = false;
+        setFilterOptions(options);
+        if (shouldResetMultiFiltersRef.current) {
+          setFilters((prev) => {
+            if (!prev) {
+              return prev;
+            }
+            return {
+              ...prev,
+              officeNames: options.officeNames,
+              addresses: options.addresses,
+              pinnedValues: [true, false]
+            };
+          });
+          shouldResetMultiFiltersRef.current = false;
+        }
+      } catch (loadError) {
+        const message = loadError instanceof Error ? loadError.message : "Ошибка загрузки фильтров из базы";
+        setError(message);
       }
     };
 
     void loadOptions();
-  }, [filters?.cityId, filters?.currency]);
+  }, [filters?.cityId, filters?.currency, isDbConfigured]);
 
   const loadData = useCallback(
     async (showLoading: boolean): Promise<void> => {
       if (!filters) {
+        return;
+      }
+
+      if (!isDbConfigured) {
+        setRows([]);
+        setDatabaseLastUpdate(null);
+        setError("Для отображения данных укажите корректные доступы к БД в настройках.");
         return;
       }
 
@@ -491,7 +524,7 @@ export default function App() {
         }
       }
     },
-    [filters]
+    [filters, isDbConfigured]
   );
 
   useEffect(() => {
@@ -668,6 +701,7 @@ export default function App() {
       .saveUserSettings(next)
       .then((saved) => {
         setUserSettings(saved);
+        setError(null);
         setIsSettingsOpen(false);
       })
       .catch((saveError) => {
@@ -684,6 +718,18 @@ export default function App() {
     <div className="page">
       <section className="content">
         <aside className="left-panel">
+          {(!isDbConfigured || hasDbCredentialError) && (
+            <div className="db-warning">
+              <span>
+                {!isDbConfigured
+                  ? "Для загрузки данных укажите доступы к БД в настройках."
+                  : "Данные подключения к БД неверны. Проверьте настройки."}
+              </span>
+              <button type="button" onClick={openSettingsModal}>
+                Открыть настройки
+              </button>
+            </div>
+          )}
           <section className="filters">
             <SingleSelectDropdown
               label="Валюта"

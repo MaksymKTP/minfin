@@ -3,6 +3,7 @@ import type { AutoUpdateStatus, DataResponse, FilterOptions, FiltersState, UserS
 
 const api = {
   getDefaultFilters: (): Promise<FiltersState> => ipcRenderer.invoke("filters:default"),
+  getStaticFilterOptions: (): Promise<FilterOptions> => ipcRenderer.invoke("filters:static-options"),
   getFilterOptions: (filters: Pick<FiltersState, "cityId" | "currency">): Promise<FilterOptions> =>
     ipcRenderer.invoke("filters:options", filters),
   getRatesData: (filters: FiltersState): Promise<DataResponse> => ipcRenderer.invoke("rates:data", filters),

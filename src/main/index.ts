@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import electronUpdater from "electron-updater";
-import { getData, getDefaultFilters, getFilterOptions } from "./db";
+import { getData, getDefaultFilters, getFilterOptions, getStaticFilterOptions } from "./db";
 import type { AutoUpdateStatus, FiltersState, UserSettings } from "../shared/types";
 
 const { autoUpdater } = electronUpdater;
@@ -275,8 +275,15 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("filters:default", () => getDefaultFilters());
-  ipcMain.handle("filters:options", (_, filters: Pick<FiltersState, "cityId" | "currency">) => getFilterOptions(filters));
-  ipcMain.handle("rates:data", (_, filters: FiltersState) => getData(filters));
+  ipcMain.handle("filters:static-options", () => getStaticFilterOptions());
+  ipcMain.handle("filters:options", async (_, filters: Pick<FiltersState, "cityId" | "currency">) => {
+    const userSettings = await getUserSettings();
+    return getFilterOptions(filters, userSettings);
+  });
+  ipcMain.handle("rates:data", async (_, filters: FiltersState) => {
+    const userSettings = await getUserSettings();
+    return getData(filters, userSettings);
+  });
   ipcMain.handle("external:open-url", (_, url: string) => shell.openExternal(url));
   ipcMain.handle("user-settings:get", () => getUserSettings());
   ipcMain.handle("user-settings:save", (_, payload: UserSettings) => saveUserSettings(payload));

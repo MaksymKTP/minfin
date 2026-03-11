@@ -1,30 +1,20 @@
-import dotenv from "dotenv";
 import { Pool, types } from "pg";
-import fs from "node:fs";
-import path from "node:path";
 import type {
   DataResponse,
   ExchangeRateRow,
   FilterOptions,
   FiltersState,
-  OrderBookPayload
+  OrderBookPayload,
+  UserSettings
 } from "../shared/types";
 import { loadSettings } from "./settings";
-
-const packagedEnvPath = path.join(process.resourcesPath, ".env");
-dotenv.config(fs.existsSync(packagedEnvPath) ? { path: packagedEnvPath } : undefined);
 
 types.setTypeParser(1700, (value: string) => Number.parseFloat(value));
 
 const settings = loadSettings();
-
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT ?? "5432"),
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD
-});
+const DATABASE_NAME = "general_analytics";
+let pool: Pool | null = null;
+let poolKey: string | null = null;
 
 const BASE_LATEST_CTE = `
   WITH latest AS (
@@ -38,6 +28,50 @@ const BASE_LATEST_CTE = `
   )
 `;
 const EMPTY_VALUE_TOKEN = "__EMPTY__";
+
+function buildPoolKey(userSettings: UserSettings): string {
+  return `${userSettings.dbHost}|${userSettings.dbPort}|${userSettings.dbUser}|${userSettings.dbPassword}`;
+}
+
+function validateCredentials(userSettings: UserSettings): void {
+  if (!userSettings.dbHost || !userSettings.dbPort || !userSettings.dbUser || !userSettings.dbPassword) {
+    throw new Error("Для получения данных укажите DB Host, DB Port, DB User и DB Password в настройках.");
+  }
+}
+
+async function getPool(userSettings: UserSettings): Promise<Pool> {
+  validateCredentials(userSettings);
+  const key = buildPoolKey(userSettings);
+
+  if (pool && poolKey === key) {
+    return pool;
+  }
+
+  if (pool) {
+    await pool.end().catch(() => undefined);
+    pool = null;
+    poolKey = null;
+  }
+
+  const nextPool = new Pool({
+    host: userSettings.dbHost,
+    port: Number(userSettings.dbPort),
+    database: DATABASE_NAME,
+    user: userSettings.dbUser,
+    password: userSettings.dbPassword
+  });
+
+  try {
+    await nextPool.query("SELECT 1");
+  } catch {
+    await nextPool.end().catch(() => undefined);
+    throw new Error("Неверные данные подключения к БД. Проверьте настройки и попробуйте снова.");
+  }
+
+  pool = nextPool;
+  poolKey = key;
+  return nextPool;
+}
 
 function buildNullableTextCondition(
   columnName: "office_name" | "address",
@@ -152,16 +186,31 @@ function getDatabaseLastUpdate(rows: ExchangeRateRow[]): string | null {
   return new Date(latest).toISOString();
 }
 
-export async function getFilterOptions(baseFilters: Pick<FiltersState, "cityId" | "currency">): Promise<FilterOptions> {
+export function getStaticFilterOptions(): FilterOptions {
+  const cities = Object.entries(settings.cities).map(([id, name]) => ({ id: Number(id), name }));
+  return {
+    currencies: settings.supportedCurrencies,
+    cities,
+    officeNames: [],
+    addresses: [],
+    pinnedValues: [true, false]
+  };
+}
+
+export async function getFilterOptions(
+  baseFilters: Pick<FiltersState, "cityId" | "currency">,
+  userSettings: UserSettings
+): Promise<FilterOptions> {
   const values: Array<string | number | null> = [baseFilters.cityId, baseFilters.currency];
   const cte = BASE_LATEST_CTE;
+  const db = await getPool(userSettings);
 
   const [officeResult, addressResult] = await Promise.all([
-    pool.query<{ office_name: string | null }>(
+    db.query<{ office_name: string | null }>(
       `${cte} SELECT DISTINCT office_name FROM latest ORDER BY office_name ASC NULLS FIRST`,
       values
     ),
-    pool.query<{ address: string | null }>(
+    db.query<{ address: string | null }>(
       `${cte} SELECT DISTINCT address FROM latest ORDER BY address ASC NULLS FIRST`,
       values
     )
@@ -178,10 +227,11 @@ export async function getFilterOptions(baseFilters: Pick<FiltersState, "cityId" 
   };
 }
 
-export async function getData(filters: FiltersState): Promise<DataResponse> {
+export async function getData(filters: FiltersState, userSettings: UserSettings): Promise<DataResponse> {
   const baseValues: Array<string | number | null> = [filters.cityId, filters.currency];
   const { whereSql, values } = buildWhere(filters, 3);
   const queryValues = [...baseValues, ...values];
+  const db = await getPool(userSettings);
 
   const query = `${BASE_LATEST_CTE}
     SELECT *
@@ -190,7 +240,7 @@ export async function getData(filters: FiltersState): Promise<DataResponse> {
     ORDER BY sell_rate ASC NULLS LAST, buy_rate DESC NULLS LAST, rating_average DESC NULLS LAST
   `;
 
-  const result = await pool.query<ExchangeRateRow>(query, queryValues);
+  const result = await db.query<ExchangeRateRow>(query, queryValues);
   const rows = result.rows;
 
   return {
