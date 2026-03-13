@@ -16,16 +16,10 @@ const DATABASE_NAME = "general_analytics";
 let pool: Pool | null = null;
 let poolKey: string | null = null;
 
-const BASE_LATEST_CTE = `
-  WITH latest AS (
-    SELECT DISTINCT ON (city_id, currency, branch_rate_id) *
-    FROM exchange_rates
-    WHERE is_active = true
-      AND "timestamp"::date = CURRENT_DATE
-      AND city_id = $1
-      AND ($2::varchar IS NULL OR lower(currency) = lower($2))
-    ORDER BY city_id, currency, branch_rate_id, "timestamp" DESC
-  )
+const BASE_VIEW_WHERE_SQL = `
+  FROM exchange_rates_latest
+  WHERE city_id = $1
+    AND ($2::varchar IS NULL OR lower(currency) = lower($2))
 `;
 const EMPTY_VALUE_TOKEN = "__EMPTY__";
 
@@ -110,7 +104,7 @@ function buildNullableTextCondition(
   };
 }
 
-function buildWhere(filters: FiltersState, startIndex: number): { whereSql: string; values: unknown[] } {
+function buildWhere(filters: FiltersState, startIndex: number): { filtersSql: string; values: unknown[] } {
   const values: unknown[] = [];
   const conditions: string[] = [];
   let index = startIndex;
@@ -135,10 +129,10 @@ function buildWhere(filters: FiltersState, startIndex: number): { whereSql: stri
   }
 
   if (conditions.length === 0) {
-    return { whereSql: "", values };
+    return { filtersSql: "", values };
   }
 
-  return { whereSql: ` WHERE ${conditions.join(" AND ")}`, values };
+  return { filtersSql: ` AND ${conditions.join(" AND ")}`, values };
 }
 
 function toOrderBook(rows: ExchangeRateRow[]): OrderBookPayload {
@@ -202,16 +196,19 @@ export async function getFilterOptions(
   userSettings: UserSettings
 ): Promise<FilterOptions> {
   const values: Array<string | number | null> = [baseFilters.cityId, baseFilters.currency];
-  const cte = BASE_LATEST_CTE;
   const db = await getPool(userSettings);
 
   const [officeResult, addressResult] = await Promise.all([
     db.query<{ office_name: string | null }>(
-      `${cte} SELECT DISTINCT office_name FROM latest ORDER BY office_name ASC NULLS FIRST`,
+      `SELECT DISTINCT office_name
+       ${BASE_VIEW_WHERE_SQL}
+       ORDER BY office_name ASC NULLS FIRST`,
       values
     ),
     db.query<{ address: string | null }>(
-      `${cte} SELECT DISTINCT address FROM latest ORDER BY address ASC NULLS FIRST`,
+      `SELECT DISTINCT address
+       ${BASE_VIEW_WHERE_SQL}
+       ORDER BY address ASC NULLS FIRST`,
       values
     )
   ]);
@@ -229,14 +226,14 @@ export async function getFilterOptions(
 
 export async function getData(filters: FiltersState, userSettings: UserSettings): Promise<DataResponse> {
   const baseValues: Array<string | number | null> = [filters.cityId, filters.currency];
-  const { whereSql, values } = buildWhere(filters, 3);
+  const { filtersSql, values } = buildWhere(filters, 3);
   const queryValues = [...baseValues, ...values];
   const db = await getPool(userSettings);
 
-  const query = `${BASE_LATEST_CTE}
+  const query = `
     SELECT *
-    FROM latest
-    ${whereSql}
+    ${BASE_VIEW_WHERE_SQL}
+    ${filtersSql}
     ORDER BY sell_rate ASC NULLS LAST, buy_rate DESC NULLS LAST, rating_average DESC NULLS LAST
   `;
 

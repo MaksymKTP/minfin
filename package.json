@@ -1,6 +1,6 @@
 {
   "name": "minfin",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Desktop app for Minfin arbitrage visualization",
   "main": "./out/main/index.js",
   "scripts": {
